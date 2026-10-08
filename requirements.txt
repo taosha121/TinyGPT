@@ -1,0 +1,5 @@
+torch
+modelscope
+addict
+pandas
+pyarrow
