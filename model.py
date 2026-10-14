@@ -113,7 +113,11 @@ class TinyGPT(nn.Module):
             Block(hidden, heads, context_len, dropout) for _ in range(layers)
         ])
         self.ln_f    = nn.LayerNorm(hidden)               # 最后一层 Block 后的归一化
-        # LM Head：最后一个线性层 (384, 50257)，把每个 token 的 384 维向量映射到词表大小的得分。
+        # LM Head：LM = Language Model，Head 是深度学习惯例，指模型末端负责最终预测的那一层。
+        # 原始 Transformer 论文（2017）里这层叫"Linear + Softmax"，没有专门命名。
+        # "LM Head"来自 HuggingFace，他们把预训练模型主体和任务层分开，任务层统称 Head，
+        # 语言模型任务的叫 LM Head，分类任务的叫 Classification Head，后来成了行业惯例。
+        # 这里是一个线性层 (384→50257)，把每个 token 的 384 维向量映射到词表大小的得分。
         # 例如输入 "Once upon a time"，最后一个 token "time" 的 384 维向量经过 LM Head 得到
         # 50257 个得分，softmax 后是"下一个词是每个词的概率"，训练时算 loss，推理时采样下一个 token。
         self.lm_head = nn.Linear(hidden, vocab_size, bias=False)

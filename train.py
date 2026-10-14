@@ -126,6 +126,7 @@ def train():
 
     global_step = 0
     for epoch in range(EPOCHS):
+        # model.train() 来自 nn.Module，切换到训练模式：Dropout 随机丢弃神经元（防止过拟合）
         model.train()
         epoch_loss = 0.0
         t0 = time.time()
@@ -152,10 +153,12 @@ def train():
                 t0 = time.time()
 
             if global_step % GEN_EVERY == 0:
+                # model.eval() 切换到推理模式：关闭 Dropout，所有神经元正常工作
                 model.eval()
                 inp = torch.tensor([prompt_ids], device=device)
                 out = model.generate(inp, max_new_tokens=60)
                 print('\n[生成样本]', tokenizer.decode(out[0].tolist()), '\n')
+                # 生成完切回训练模式，继续训练
                 model.train()
 
     torch.save(model.state_dict(), CHECKPOINT)
