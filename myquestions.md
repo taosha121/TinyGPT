@@ -335,6 +335,28 @@ multinomial → 67% 选 "the"，24% 选 "a"，9% 选 "cat"
 
 ---
 
+## 参数统计
+
+**Q: train.py 打印的"总参数"和"非 Embedding 参数"有什么区别，为什么要单独列非 Embedding？**
+
+演示配置的数字：总参数 6.7M，非 Embedding 0.2M。
+
+差值（约 6.5M）几乎全是 Token Embedding 表：50257 个词 × 128 维 = 6.43M。
+
+Embedding 训练完之后确实能编码语义关系（"king - man + woman ≈ queen" 就是从 embedding 向量空间里算出来的），说它是"查找表"只是描述结构，不是说它没有语义信息。
+
+单独列非 Embedding 的原因：Embedding 的参数量由 tokenizer 词表大小决定（50257），不是可以调节的旋钮。想让模型更强，调的是 hidden、layers、heads，这些改动全体现在非 Embedding 参数上。
+
+对比两种配置：
+- 演示配置（layers=1）：非 Embedding 0.2M
+- 理想配置（layers=6）：非 Embedding ~10.7M
+
+两者 Embedding 参数几乎一样大，差别全在非 Embedding，所以它更能反映"用了多少计算资源来理解上下文"。
+
+另外，Embedding 只负责把 token id 映射成初始向量，token 之间的关系是后面 Attention 层计算出来的，不是 Embedding 直接算的。
+
+---
+
 ## 模型能力边界
 
 **Q: 训练完的 TinyGPT，给它中文 prompt 或英文指令会怎样？**
