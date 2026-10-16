@@ -1,0 +1,17 @@
+{
+    "hidden": 128,
+    "layers": 1,
+    "heads": 4,
+    "context_len": 256,
+    "dropout": 0.1,
+
+    "batch_size": 64,
+    "epochs": 1,
+    "lr": 3e-4,
+    "warmup": 200,
+    "log_every": 200,
+    "gen_every": 1000,
+    "n_stories": 10000,
+
+    "checkpoint": "tiny_gpt.pt"
+}

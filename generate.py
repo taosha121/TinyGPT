@@ -1,14 +1,18 @@
+import json
 import torch
 import torch.nn.functional as F
-from modelscope import GPT2Tokenizer
+import tiktoken
 
 from model import TinyGPT
 
-HIDDEN      = 384
-LAYERS      = 6
-HEADS       = 8
-CONTEXT_LEN = 256
-CHECKPOINT  = 'tiny_gpt.pt'
+with open('config.json') as f:
+    cfg = json.load(f)
+
+HIDDEN      = cfg['hidden']
+LAYERS      = cfg['layers']
+HEADS       = cfg['heads']
+CONTEXT_LEN = cfg['context_len']
+CHECKPOINT  = cfg['checkpoint']
 
 
 def get_device():
@@ -21,10 +25,10 @@ def get_device():
 
 def main():
     device    = get_device()
-    tokenizer = GPT2Tokenizer.from_pretrained('AI-ModelScope/gpt2')
+    tokenizer = tiktoken.get_encoding('gpt2')
 
     model = TinyGPT(
-        vocab_size  = tokenizer.vocab_size,
+        vocab_size  = tokenizer.n_vocab,
         hidden      = HIDDEN,
         layers      = LAYERS,
         heads       = HEADS,
@@ -38,6 +42,7 @@ def main():
         'Once upon a time',
         'The little girl',
         'One sunny day',
+        'Two thousand years ago'
     ]
 
     for prompt in prompts:

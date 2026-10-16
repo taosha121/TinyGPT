@@ -2,31 +2,35 @@ import os
 import glob
 import time
 import math
+import json
 import torch
 import torch.nn as nn
 import pandas as pd
+import tiktoken
 from torch.utils.data import Dataset, DataLoader
-from modelscope import GPT2Tokenizer
 from modelscope.hub.snapshot_download import snapshot_download
 
 from model import TinyGPT
 
-# ── 超参数 ────────────────────────────────────────────────
-HIDDEN      = 384
-LAYERS      = 6
-HEADS       = 8
-CONTEXT_LEN = 256
-DROPOUT     = 0.1
+# ── 超参数（从 config.json 读取）────────────────────────────
+# 理想配置 hidden=384/layers=6/heads=8/n_stories=100000/epochs=3，训练约 10 小时
+# 当前为演示配置，训练约 45 分钟
+with open('config.json') as f:
+    cfg = json.load(f)
 
-BATCH_SIZE  = 64
-EPOCHS      = 3
-LR          = 3e-4
-WARMUP      = 200
-LOG_EVERY   = 200
-GEN_EVERY   = 1000
-N_STORIES   = 100_000      # 取前 10 万个故事
-
-CHECKPOINT  = 'tiny_gpt.pt'
+HIDDEN      = cfg['hidden']
+LAYERS      = cfg['layers']
+HEADS       = cfg['heads']
+CONTEXT_LEN = cfg['context_len']
+DROPOUT     = cfg['dropout']
+BATCH_SIZE  = cfg['batch_size']
+EPOCHS      = cfg['epochs']
+LR          = cfg['lr']
+WARMUP      = cfg['warmup']
+LOG_EVERY   = cfg['log_every']
+GEN_EVERY   = cfg['gen_every']
+N_STORIES   = cfg['n_stories']
+CHECKPOINT  = cfg['checkpoint']
 
 
 # ── 设备 ─────────────────────────────────────────────────
@@ -69,7 +73,7 @@ def load_data(tokenizer):
     files = sorted(glob.glob(os.path.join(dataset_dir, '**/*.parquet'), recursive=True))
     print(f'找到 {len(files)} 个文件')
 
-    eos = tokenizer.eos_token_id
+    eos = tokenizer.eot_token
     all_ids = []
     count = 0
     for f in files:
@@ -100,7 +104,7 @@ def train():
     device = get_device()
     print(f'设备：{device}')
 
-    tokenizer = GPT2Tokenizer.from_pretrained('AI-ModelScope/gpt2')
+    tokenizer = tiktoken.get_encoding('gpt2')
     data = load_data(tokenizer)
 
     dataset = ChunkDataset(data, CONTEXT_LEN)
@@ -108,7 +112,7 @@ def train():
     print(f'数据集：{len(dataset):,} 块，{len(loader):,} 个 batch/epoch')
 
     model = TinyGPT(
-        vocab_size  = tokenizer.vocab_size,
+        vocab_size  = tokenizer.n_vocab,
         hidden      = HIDDEN,
         layers      = LAYERS,
         heads       = HEADS,

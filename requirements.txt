@@ -3,3 +3,4 @@ modelscope
 addict
 pandas
 pyarrow
+tiktoken
