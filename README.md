@@ -21,12 +21,16 @@
 
 ```
 TinyGPT/
-├── model.py       # CausalSelfAttention, Block, TinyGPT 类定义
-├── train.py       # 数据加载 + 训练循环
-├── generate.py    # 加载训练好的模型生成文本
+├── model.py          # CausalSelfAttention, Block, TinyGPT 类定义
+├── train.py          # 数据加载 + 预训练循环
+├── generate.py       # 加载预训练模型生成文本
+├── sft_data.py       # 从 TinyStories 构造指令数据，输出 sft_dataset.json
+├── sft_train.py      # SFT 训练，加载 tiny_gpt.pt，保存 tiny_gpt_sft.pt
+├── sft_generate.py   # SFT 推理，交互式接受指令输入
 ├── requirements.txt
-├── myquestions.md # 学习过程中的问答记录
-└── tiny_gpt.pt    # 训练好的权重（训练后生成）
+├── myquestions.md    # 学习过程中的问答记录
+├── tiny_gpt.pt       # 预训练权重（训练后生成）
+└── tiny_gpt_sft.pt   # SFT 权重（SFT 训练后生成）
 ```
 
 ## 快速开始
@@ -34,11 +38,20 @@ TinyGPT/
 ```bash
 pip install -r requirements.txt
 
-# 训练（首次运行会自动下载数据集，约 2GB）
+# 预训练（首次运行会自动下载数据集，约 2GB）
 python train.py
 
-# 生成文本
+# 预训练模型生成文本
 python generate.py
+
+# SFT：构造指令数据集（从已下载的 TinyStories 中提取，输出 sft_dataset.json）
+python sft_data.py
+
+# SFT：在预训练权重基础上微调（需要先有 tiny_gpt.pt）
+python sft_train.py
+
+# SFT 模型交互式推理
+python sft_generate.py
 ```
 
 ## 架构说明
@@ -56,6 +69,61 @@ python generate.py
 
 训练：与右移一位的标签算 Cross-Entropy Loss，反向传播更新全部参数。  
 推理：逐步生成，每步取最后位置的 logits 采样下一个 token（top-k + temperature）。
+
+## 为什么需要 SFT，以及 Pretrain → SFT → RLHF 解决的是什么问题
+
+### 预训练 Base Model 能做什么，不能做什么
+
+预训练的目标是 next token prediction：给一段文字，预测下一个 token。模型在海量文本上优化这个目标，结果是学到了语言的统计规律——词法、句法、事实知识、写作风格。
+
+但这个目标本身不等于"听懂指令后做事"。给 Base Model 发一条指令：
+
+```
+Tell me a story about a knight.
+```
+
+它不会回答，而是续写——因为它只会做"这段文字接下来最可能是什么"。它可能续出更多指令，或者直接乱跑。
+
+**Base Model 的能力边界：** 它有能力写出很好的故事，但它不知道"这是一条指令，我应该执行它"。
+
+### SFT 解决什么问题
+
+SFT（Supervised Fine-Tuning，监督微调）教模型识别"指令-回答"这个格式，把 Base Model 从"续写机器"变成"执行指令的助手"。
+
+做法：构造 `(instruction, response)` 对，用指令模板包装后继续做 next token prediction，但 loss 只算 response 部分（instruction 部分设 -100，不参与梯度）。
+
+```
+x：  [### Instruction: Tell me a story about a knight  ### Response:  Once  upon  a  time ...]
+y：  [  -100   -100   -100   -100   -100   -100   -100    upon   a    time ...]
+                                                          ↑ 只有这里产生 loss
+```
+
+模型看到完整的 instruction，attention 会利用这些 token，但梯度只来自 response——所以模型学到的是"根据这个 instruction，应该生成这样的 response"，而不是"instruction 文字本身的续写概率"。
+
+**SFT 之后：** 模型能理解指令格式，按要求生成回答。但它优化的目标仍是模仿训练集里的 response，不保证生成的内容真的对人有用或符合人的偏好。
+
+### RLHF 解决什么问题
+
+RLHF（Reinforcement Learning from Human Feedback）解决的是"人到底更喜欢哪种回答"这个问题。
+
+SFT 之后的模型能"执行指令"，但不同的 response 质量差异很大——有的更准确、更有帮助、更安全，有的答非所问、有的有害。纯靠模仿数据无法区分这些，因为训练集本身也有噪声。
+
+RLHF 的做法：
+1. 让模型对同一个 prompt 生成多个 response，人工标注哪个更好；
+2. 用这些偏好数据训练一个 Reward Model，它能预测人类对任意 response 的评分；
+3. 用 RL（通常是 PPO）让 SFT 模型最大化 Reward Model 的得分。
+
+**三步的分工：**
+
+| 阶段 | 解决的问题 | 数据形式 |
+|------|-----------|---------|
+| Pretrain | 学语言、学知识 | 海量无标注文本 |
+| SFT | 学指令格式，从续写变为问答 | (instruction, response) 对 |
+| RLHF | 对齐人类偏好，提升有用性和安全性 | 人工标注的 response 排序 |
+
+三者不是重复的工作，而是各自解决上一阶段解决不了的问题。Base Model 是基础，没有它 SFT 需要极大的数据量；SFT 是格式适配，没有它模型不知道"被问了要回答"；RLHF 是偏好对齐，没有它模型会给出格式正确但质量低劣的回答。
+
+---
 
 ## 训练耗时参考
 
